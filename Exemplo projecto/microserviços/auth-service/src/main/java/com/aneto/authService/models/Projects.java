@@ -4,33 +4,64 @@ import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-@Data
+import java.time.LocalDateTime;
+
 @Getter
 @Setter
-@Entity
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "TB_Projetos", schema = "AUTH",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"username", "project_name"}, name = "UK_project_by_user")
-)
+@Entity
+@IdClass(ProjectId.class)
+@EntityListeners(AuditingEntityListener.class)
+@Table(name = "TB_Projetos", schema = "AUTH")
 public class Projects {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
 
+    @Id
     @NotBlank(message = "Username não pode ser vazio")
     private String username;
 
-    @NotBlank(message = "Username não pode ser vazio")
+    @Id
+    @NotBlank(message = "Nome do projeto não pode ser vazio")
+    @Column(name = "project_name")
     private String projectName;
 
-    @Column(nullable = false)
     private Double requiredHours;
 
+    @Column(nullable = false, columnDefinition = "float8 default 1.1")
+    private Double hourlyRate = 1.1;
+
+    // Novo campo para armazenar o valor calculado
+    private Double totalValue;
+
+    // Campos de Auditoria
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @LastModifiedDate
+    @Column(nullable = false)
+    private LocalDateTime updatedAt;
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "users_id", nullable = false)
+    @JoinColumn(name = "username", referencedColumnName = "username", insertable = false, updatable = false)
     @JsonBackReference
-    @ToString.Exclude  // ⭐ SOLUÇÃO: Exclui do toString() para evitar ciclo
+    @ToString.Exclude
     private Users users;
+
+    /**
+     * Calcula o valor total automaticamente antes de inserir ou atualizar no banco.
+     */
+    @PrePersist
+    @PreUpdate
+    public void calculateTotalValue() {
+        if (this.requiredHours != null && this.hourlyRate != null) {
+            this.totalValue = this.requiredHours * this.hourlyRate;
+        } else {
+            this.totalValue = 0.0;
+        }
+    }
 }
